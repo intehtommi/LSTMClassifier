@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[139]:
+# In[63]:
 
 
 import os
@@ -15,7 +15,7 @@ import torch.nn as nn
 from torch.optim import Adam
 
 
-# In[140]:
+# In[64]:
 
 
 def tround(num, dec=0):
@@ -29,7 +29,7 @@ def tround(num, dec=0):
             return(a)
 
 
-# In[141]:
+# In[65]:
 
 
 scoredf = pd.read_csv("../Time-Table-Annotation.csv")
@@ -40,7 +40,7 @@ train_index = np.array([1,2])
 test_index = np.array([1,2])
 
 
-# In[142]:
+# In[66]:
 
 
 def Dataset_create(train_index, test_index, AU, score):
@@ -84,17 +84,7 @@ def Dataset_create(train_index, test_index, AU, score):
     return X_train, X_test, y_train, y_test
 
 
-# In[143]:
-
-
-kf = KFold(n_splits = 10, shuffle = True)
-for train_index, test_index in kf.split(score):
-    X_train, X_test, y_train, y_test = Dataset_create(train_index, test_index, AU, score)
-    print(X_train.shape, X_test.shape, y_train.shape, y_test.shape)
-    break
-
-
-# In[144]:
+# In[67]:
 
 
 def reshapeindices_flat(X_train, X_test):
@@ -103,7 +93,7 @@ def reshapeindices_flat(X_train, X_test):
     return X_train, X_test
 
 
-# In[145]:
+# In[68]:
 
 
 def reshapeindices_split(data,frames, axis):
@@ -115,33 +105,21 @@ def reshapeindices_split(data,frames, axis):
     return data
 
 
-# In[146]:
+# In[69]:
 
 
-X_train = reshapeindices_split(X_train, 5, 2)
-X_test = reshapeindices_split(X_test, 5, 2)
+def VerificationDataset(trainsize, featsize, samplelength, testsize): #This is for debug purposes, generates a similar dataset with label 1-6 and train data 1-6.
+    x = np.floor(np.arange(trainsize)/math.floor(trainsize/6))
+    c = np.ones((featsize,samplelength))
+    X_train = x[..., None, None] * c[None, :, :]
+    y = np.floor(np.arange(testsize)/math.floor(testsize/6))
+    X_test = y[..., None, None] * c[None, :, :]
+    y_train = x
+    y_test = y
+    return X_train, X_test, y_train, y_test
 
 
-# In[ ]:
-
-
-
-
-
-# In[ ]:
-
-
-
-
-
-# In[147]:
-
-
-X_train = X_train.transpose(1,3,0,2)
-X_test = X_test.transpose(1,3,0,2)
-
-
-# In[148]:
+# In[70]:
 
 
 class Predictor(nn.Module):
@@ -171,44 +149,93 @@ class Predictor(nn.Module):
 
 
 
-# In[149]:
+# In[40]:
+
+
+kf = KFold(n_splits = 10, shuffle = True)
+for train_index, test_index in kf.split(score):
+    X_train, X_test, y_train, y_test = Dataset_create(train_index, test_index, AU, score)
+    print(X_train.shape, X_test.shape, y_train.shape, y_test.shape)
+    break
+
+
+# In[71]:
+
+
+X_train, X_test, y_train, y_test = VerificationDataset(155, 18, 10531, 18)
+
+
+# In[ ]:
+
+
+
+
+
+# In[72]:
+
+
+X_train = reshapeindices_split(X_train, 5, 2)
+X_test = reshapeindices_split(X_test, 5, 2)
+X_train = X_train.transpose(1,3,0,2)
+X_test = X_test.transpose(1,3,0,2)
+
+
+# In[ ]:
+
+
+
+
+
+# In[ ]:
+
+
+
+
+
+# In[73]:
 
 
 X_train.shape
 
 
-# In[150]:
+# In[74]:
 
 
 y_traintensor = np.repeat(y_train[None, :], X_train.shape[2], axis=0)
 
 
-# In[151]:
+# In[75]:
 
 
 X_train.shape
 
 
-# In[152]:
+# In[76]:
 
 
 X_train=X_train[:,:,:,1:]
 X_train=X_train.transpose(0,2,1,3)
 
 
-# In[153]:
+# In[77]:
 
 
-X_train = X_train.reshape(X_train.shape[0],X_train.shape[1],X_train.shape[2]*X_train.shape[3],1).transpose(1,3,0,2)
+X_train = X_train.reshape(X_train.shape[0],X_train.shape[1],X_train.shape[2]*X_train.shape[3],1).transpose(0,3,1,2)
 
 
-# In[154]:
+# In[79]:
 
 
 X_train.shape
 
 
-# In[155]:
+# In[83]:
+
+
+X_train[154,0].shape
+
+
+# In[55]:
 
 
 training_size = X_train.shape[0] #traning dataのデータ数
@@ -221,13 +248,13 @@ criterion = nn.CrossEntropyLoss() #評価関数の宣言
 optimizer = Adam(model.parameters(), lr=0.01) #最適化関数の宣言
 
 
-# In[156]:
+# In[56]:
 
 
 model
 
 
-# In[169]:
+# In[88]:
 
 
 running_losscount = []
@@ -235,10 +262,10 @@ training_accuracycount = []
 for epoch in range(epochs_num):
     running_loss = 0.0
     training_accuracy = 0.0
+    optimizer.zero_grad()
     for i in range(training_size):
-        optimizer.zero_grad()
         data = torch.tensor([X_train[i][0]]).float()
-        label = torch.tensor(y_traintensor[i,:]).long().T
+        label = torch.tensor(y_traintensor[:,i]).long().T
         #print(data)
         #print(label)
         output = model(data.float())
@@ -250,10 +277,11 @@ for epoch in range(epochs_num):
         loss.backward()
         optimizer.step()
         running_loss += loss.item()
+        #print(output.shape)
         output = torch.argmax(output, dim=1)
-        #print("output")
+        #print("output" + str(output.data.shape))
         #print(output.data)
-        #print("input")
+        #print("input" + str(label.data.shape))
         #print(label.data)
         training_accuracy += np.sum((np.abs((output.data - label.data).numpy()) < 0.1))/len(output.data)
         #print(i)
@@ -264,10 +292,22 @@ for epoch in range(epochs_num):
     training_accuracycount.append(training_accuracy)
 
 
-# In[158]:
+# In[ ]:
 
 
-y_traintensor.shape
+
+
+
+# In[36]:
+
+
+x = np.floor(np.arange(155)/25)
+
+
+# In[37]:
+
+
+x
 
 
 # In[ ]:
@@ -282,34 +322,18 @@ y_traintensor.shape
 
 
 
-# In[ ]:
+# In[34]:
 
 
+a = np.array([1, 2,3,4,5])
+c = np.ones((18,10531))
+d = x[..., None, None] * c[None, :, :]
 
 
-
-# In[ ]:
-
+# In[35]:
 
 
-
-
-# In[97]:
-
-
-
-
-
-# In[98]:
-
-
-
-
-
-# In[ ]:
-
-
-
+d.shape
 
 
 # In[ ]:
