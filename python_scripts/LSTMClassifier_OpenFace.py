@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[63]:
+# In[121]:
 
 
 import os
@@ -13,9 +13,10 @@ import glob
 import torch
 import torch.nn as nn
 from torch.optim import Adam
+np.set_printoptions(threshold=np.inf)
 
 
-# In[64]:
+# In[122]:
 
 
 def tround(num, dec=0):
@@ -29,7 +30,7 @@ def tround(num, dec=0):
             return(a)
 
 
-# In[65]:
+# In[123]:
 
 
 scoredf = pd.read_csv("../Time-Table-Annotation.csv")
@@ -40,7 +41,7 @@ train_index = np.array([1,2])
 test_index = np.array([1,2])
 
 
-# In[66]:
+# In[124]:
 
 
 def Dataset_create(train_index, test_index, AU, score):
@@ -84,7 +85,7 @@ def Dataset_create(train_index, test_index, AU, score):
     return X_train, X_test, y_train, y_test
 
 
-# In[67]:
+# In[125]:
 
 
 def reshapeindices_flat(X_train, X_test):
@@ -93,7 +94,7 @@ def reshapeindices_flat(X_train, X_test):
     return X_train, X_test
 
 
-# In[68]:
+# In[126]:
 
 
 def reshapeindices_split(data,frames, axis):
@@ -105,21 +106,21 @@ def reshapeindices_split(data,frames, axis):
     return data
 
 
-# In[69]:
+# In[127]:
 
 
 def VerificationDataset(trainsize, featsize, samplelength, testsize): #This is for debug purposes, generates a similar dataset with label 1-6 and train data 1-6.
-    x = np.floor(np.arange(trainsize)/math.floor(trainsize/6))
+    x = np.floor(np.arange(trainsize)/(trainsize/6))
     c = np.ones((featsize,samplelength))
     X_train = x[..., None, None] * c[None, :, :]
-    y = np.floor(np.arange(testsize)/math.floor(testsize/6))
+    y = np.floor(np.arange(testsize)/(testsize/6))
     X_test = y[..., None, None] * c[None, :, :]
     y_train = x
     y_test = y
     return X_train, X_test, y_train, y_test
 
 
-# In[70]:
+# In[128]:
 
 
 class Predictor(nn.Module):
@@ -130,15 +131,17 @@ class Predictor(nn.Module):
                             hidden_size = hiddenDim,
                             batch_first = True)
         self.output_layer = nn.Linear(hiddenDim, outputDim)
-        self.softmax= nn.Softmax(dim=1)
+        #self.softmax= nn.Softmax(dim=1)
     
     def forward(self, inputs, hidden0=None):
         #print(inputs.shape)
-        inputs = inputs.permute(1,0,2)
+        #inputs = inputs.permute(1,0,2)
+        #print(inputs.shape)
         output = self.input_layer(inputs) #行列サイズ対処
+        #print(output.shape)
         output, (hidden, cell) = self.rnn(output, hidden0) #LSTM層
         output = self.output_layer(output[:, -1, :]) #全結合層
-        output = self.softmax(output)
+        #output = self.softmax(output)
         
         return output
 
@@ -149,97 +152,44 @@ class Predictor(nn.Module):
 
 
 
-# In[40]:
+# In[129]:
 
 
 kf = KFold(n_splits = 10, shuffle = True)
 for train_index, test_index in kf.split(score):
     X_train, X_test, y_train, y_test = Dataset_create(train_index, test_index, AU, score)
-    print(X_train.shape, X_test.shape, y_train.shape, y_test.shape)
+    #print(X_train.shape, X_test.shape, y_train.shape, y_test.shape)
     break
 
 
-# In[71]:
+# In[103]:
 
 
-X_train, X_test, y_train, y_test = VerificationDataset(155, 18, 10531, 18)
+#X_train, X_test, y_train, y_test = VerificationDataset(500, 18, 20, 50)
 
 
 # In[ ]:
-
-
-
-
-
-# In[72]:
 
 
 X_train = reshapeindices_split(X_train, 5, 2)
 X_test = reshapeindices_split(X_test, 5, 2)
-X_train = X_train.transpose(1,3,0,2)
-X_test = X_test.transpose(1,3,0,2)
-
-
-# In[ ]:
-
-
-
-
-
-# In[ ]:
-
-
-
-
-
-# In[73]:
-
-
-X_train.shape
-
-
-# In[74]:
-
-
-y_traintensor = np.repeat(y_train[None, :], X_train.shape[2], axis=0)
-
-
-# In[75]:
-
-
-X_train.shape
-
-
-# In[76]:
-
-
+X_train = X_train.transpose(2,3,0,1)
+X_test = X_test.transpose(2,3,0,1)
+tileamount = X_train.shape[2]
+X_train = X_train.reshape(X_train.shape[0],X_train.shape[1],X_train.shape[2]*X_train.shape[3],1)
+X_test = X_test.reshape(X_test.shape[0],X_test.shape[1],X_test.shape[2]*X_test.shape[3],1)
+X_train = X_train.transpose(2,3,1,0)
+X_test = X_test.transpose(2,3,1,0)
+y_traintensor = np.tile(y_train, tileamount)
+y_traintensor = np.repeat(y_traintensor[None, :], X_train.shape[2], axis=0)
 X_train=X_train[:,:,:,1:]
-X_train=X_train.transpose(0,2,1,3)
 
 
-# In[77]:
-
-
-X_train = X_train.reshape(X_train.shape[0],X_train.shape[1],X_train.shape[2]*X_train.shape[3],1).transpose(0,3,1,2)
-
-
-# In[79]:
-
-
-X_train.shape
-
-
-# In[83]:
-
-
-X_train[154,0].shape
-
-
-# In[55]:
+# In[149]:
 
 
 training_size = X_train.shape[0] #traning dataのデータ数
-epochs_num = 1000 #traningのepoch回数
+epochs_num = 100 #traningのepoch回数
 hidden_size = 50 #LSTMの隠れ層の次元数
 
 model = Predictor(X_train.shape[3], hidden_size, 7) #modelの宣言
@@ -248,29 +198,27 @@ criterion = nn.CrossEntropyLoss() #評価関数の宣言
 optimizer = Adam(model.parameters(), lr=0.01) #最適化関数の宣言
 
 
-# In[56]:
-
-
-model
-
-
-# In[88]:
+# In[150]:
 
 
 running_losscount = []
 training_accuracycount = []
 for epoch in range(epochs_num):
+    dataoutput = []
+    dataanswer = []
     running_loss = 0.0
     training_accuracy = 0.0
-    optimizer.zero_grad()
-    for i in range(training_size):
+    for i in range(training_size): #X_train = (training_size, batch_size, sample_size, feat_size)
+        optimizer.zero_grad()
         data = torch.tensor([X_train[i][0]]).float()
-        label = torch.tensor(y_traintensor[:,i]).long().T
+        label = torch.tensor([y_traintensor[0][i]]).long().T
         #print(data)
         #print(label)
         output = model(data.float())
         #print(output.shape)
         #print(label.shape)
+        #print(output)
+        #print(label)
         #print(torch.min(output), torch.max(output))
         #print(torch.min(label), torch.max(label))
         loss = criterion(output, label)
@@ -279,97 +227,23 @@ for epoch in range(epochs_num):
         running_loss += loss.item()
         #print(output.shape)
         output = torch.argmax(output, dim=1)
-        #print("output" + str(output.data.shape))
+        #print("output " + str(output.data.shape))
         #print(output.data)
-        #print("input" + str(label.data.shape))
+        #print("answer " + str(label.data.shape))
         #print(label.data)
+        #print(np.sum((np.abs((output.data - label.data).numpy()) < 0.1))/len(output.data))
         training_accuracy += np.sum((np.abs((output.data - label.data).numpy()) < 0.1))/len(output.data)
-        #print(i)
+        dataoutput.append(int(output.data[0]))
+        dataanswer.append(int(label.data[0]))
+        if ((i%1000)==0):
+            print(str(i)+"000 epochs has passed.")
     training_accuracy /= training_size
-    running_loss /= training_size
+    running_loss /= (training_size*len(output.data))
     print('%d loss: %.3f, training_accuracy: %.5f' % (epoch + 1, running_loss, training_accuracy))
+    print(dataoutput[::20000])
+    print(dataanswer[::20000])
     running_losscount.append(running_loss)
     training_accuracycount.append(training_accuracy)
-
-
-# In[ ]:
-
-
-
-
-
-# In[36]:
-
-
-x = np.floor(np.arange(155)/25)
-
-
-# In[37]:
-
-
-x
-
-
-# In[ ]:
-
-
-
-
-
-# In[ ]:
-
-
-
-
-
-# In[34]:
-
-
-a = np.array([1, 2,3,4,5])
-c = np.ones((18,10531))
-d = x[..., None, None] * c[None, :, :]
-
-
-# In[35]:
-
-
-d.shape
-
-
-# In[ ]:
-
-
-
-
-
-# In[ ]:
-
-
-
-
-
-# In[ ]:
-
-
-
-
-
-# In[ ]:
-
-
-
-
-
-# In[ ]:
-
-
-
-
-
-# In[ ]:
-
-
-
 
 
 # In[ ]:
