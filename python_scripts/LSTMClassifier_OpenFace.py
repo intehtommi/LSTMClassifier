@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[121]:
+# In[152]:
 
 
 import os
@@ -16,7 +16,7 @@ from torch.optim import Adam
 np.set_printoptions(threshold=np.inf)
 
 
-# In[122]:
+# In[153]:
 
 
 def tround(num, dec=0):
@@ -30,7 +30,7 @@ def tround(num, dec=0):
             return(a)
 
 
-# In[123]:
+# In[154]:
 
 
 scoredf = pd.read_csv("../Time-Table-Annotation.csv")
@@ -41,7 +41,7 @@ train_index = np.array([1,2])
 test_index = np.array([1,2])
 
 
-# In[124]:
+# In[155]:
 
 
 def Dataset_create(train_index, test_index, AU, score):
@@ -85,7 +85,7 @@ def Dataset_create(train_index, test_index, AU, score):
     return X_train, X_test, y_train, y_test
 
 
-# In[125]:
+# In[156]:
 
 
 def reshapeindices_flat(X_train, X_test):
@@ -94,7 +94,7 @@ def reshapeindices_flat(X_train, X_test):
     return X_train, X_test
 
 
-# In[126]:
+# In[157]:
 
 
 def reshapeindices_split(data,frames, axis):
@@ -106,7 +106,7 @@ def reshapeindices_split(data,frames, axis):
     return data
 
 
-# In[127]:
+# In[158]:
 
 
 def VerificationDataset(trainsize, featsize, samplelength, testsize): #This is for debug purposes, generates a similar dataset with label 1-6 and train data 1-6.
@@ -120,7 +120,7 @@ def VerificationDataset(trainsize, featsize, samplelength, testsize): #This is f
     return X_train, X_test, y_train, y_test
 
 
-# In[128]:
+# In[159]:
 
 
 class Predictor(nn.Module):
@@ -152,7 +152,7 @@ class Predictor(nn.Module):
 
 
 
-# In[129]:
+# In[164]:
 
 
 kf = KFold(n_splits = 10, shuffle = True)
@@ -162,13 +162,13 @@ for train_index, test_index in kf.split(score):
     break
 
 
-# In[103]:
+# In[188]:
 
 
 #X_train, X_test, y_train, y_test = VerificationDataset(500, 18, 20, 50)
 
 
-# In[ ]:
+# In[189]:
 
 
 X_train = reshapeindices_split(X_train, 5, 2)
@@ -182,10 +182,19 @@ X_train = X_train.transpose(2,3,1,0)
 X_test = X_test.transpose(2,3,1,0)
 y_traintensor = np.tile(y_train, tileamount)
 y_traintensor = np.repeat(y_traintensor[None, :], X_train.shape[2], axis=0)
+y_testtensor = np.tile(y_test, tileamount)
+y_testtensor = np.repeat(y_testtensor[None, :], X_train.shape[2], axis=0)
 X_train=X_train[:,:,:,1:]
+X_test = X_test[:,:,:,1:]
 
 
-# In[149]:
+# In[190]:
+
+
+print(y_traintensor.shape, y_testtensor.shape)
+
+
+# In[196]:
 
 
 training_size = X_train.shape[0] #traning dataのデータ数
@@ -195,10 +204,10 @@ hidden_size = 50 #LSTMの隠れ層の次元数
 model = Predictor(X_train.shape[3], hidden_size, 7) #modelの宣言
 
 criterion = nn.CrossEntropyLoss() #評価関数の宣言
-optimizer = Adam(model.parameters(), lr=0.01) #最適化関数の宣言
+optimizer = Adam(model.parameters(), lr=0.001) #最適化関数の宣言
 
 
-# In[150]:
+# In[197]:
 
 
 running_losscount = []
@@ -235,8 +244,8 @@ for epoch in range(epochs_num):
         training_accuracy += np.sum((np.abs((output.data - label.data).numpy()) < 0.1))/len(output.data)
         dataoutput.append(int(output.data[0]))
         dataanswer.append(int(label.data[0]))
-        if ((i%1000)==0):
-            print(str(i)+"000 epochs has passed.")
+        if (((i+1)%10000)==0):
+            print(str(i+1)+"epochs has passed. It's working, don't worry.")
     training_accuracy /= training_size
     running_loss /= (training_size*len(output.data))
     print('%d loss: %.3f, training_accuracy: %.5f' % (epoch + 1, running_loss, training_accuracy))
@@ -244,6 +253,18 @@ for epoch in range(epochs_num):
     print(dataanswer[::20000])
     running_losscount.append(running_loss)
     training_accuracycount.append(training_accuracy)
+    test_accuracy = 0.0
+    test_size = int(y_testtensor.shape[1])
+    for i in range(test_size):
+        data, label = torch.tensor([X_test[i][0]]).float(), torch.tensor([y_testtensor[0][i]]).long().T
+        output = model(data.float(), None)
+        output = torch.argmax(output, dim=1)
+        test_accuracy += np.sum(np.abs((output.data - label.data).numpy()) < 0.1)/len(output.data)
+    
+    print(test_accuracy)
+    test_accuracy /= test_size
+
+    print('%d loss: %.3f, training_accuracy: %.5f, test_accuracy: %.5f' % (epoch + 1, running_loss, training_accuracy, test_accuracy))
 
 
 # In[ ]:
